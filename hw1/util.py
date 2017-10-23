@@ -27,7 +27,17 @@ def read_data(path_d , path_l , path_m):
     label_index_char = pd.read_csv(map_path , sep = '\t' , header = None , names = cols2)
     concatenate = train_48.join(label_index_char.set_index('label_48') , on = 'label_48')
         
-    return concatenate
+    return concatenate , label_48_39 , label_index_char
+
+def read_test(path_d):
+    file_path = os.path.join(path_d , 'test.ark')
+    f = open(file_path , 'r')
+    l = f.readline().split()
+    cols = list(range(len(l)-1))
+    cols.insert(0 , 'ID')    
+    data = pd.read_csv(file_path , sep = ' ' , header = None , names = cols)
+
+    return data
 """
 def read_label(path)
     file_path = os.path.join(path , 'train.lab')    
@@ -56,62 +66,92 @@ def map_data(data , labels):
     return train_48
 """
 
-def gen_batch(data , params):
-    batch_size = params['batch_size']
-    feature_num = params['feature_num']
-
-def gen_sequence(data , params):
+def gen_sequence(data , params , contain_label = True):
     num_steps = params['num_steps']
     feature_num = params['feature_num']
-    
+    overlap = params['overlap']
     sequence = []
     labels = []
+    max_len = 0    
     j = 0 # record last index    
-    
-    for i in range(data.shape[0]):
-        cur_speaker = data[i][0].split('_')[0]
-        if i+1 == data.shape[0]:
-            next_speaker == '' #???                        
-        else:
-            next_speaker = data[i+1][0].split('_')[0]
-        
-        if cur_speaker != next_speaker or i+1 == data.shape[0]:
-            
-            if (i-j+1) % num_steps != 0:
-                diff = num_steps - ((i-j+1) % num_steps)
+    if contain_label == True:
+        for i in range(data.shape[0]):
+            cur_sen = data[i][0].split('_')[0]+ '_' + data[i][0].split('_')[1]
+            if i+1 == data.shape[0]:
+                next_sen == '' #???                        
             else:
-                diff = 0
+                next_sen = data[i+1][0].split('_')[0]+ '_' + data[i+1][0].split('_')[1]                
+            
+            if cur_sen != next_sen or i+1 == data.shape[0]:
+                #print(cur_speaker)
+                tmp_data = data[j:i+1 , 1:feature_num+1]
+                tmp_label = data[j:i+1 , feature_num+3]#48 labels
+                #print(tmp_data.shape)      
+                    
+                sequence.append(tmp_data)
+                labels.append(tmp_label)
+                j = i+1
+        
+        for i in range(len(sequence)):
+            if len(sequence[i]) > max_len:
+                max_len = len(sequence[i])
+        #append 0
+        
+        output_seq = []
+        output_label = []              
+        max_indices = np.zeros((1,len(sequence)))
 
-            #print(cur_speaker)
-            tmp_data = data[j:i+1 , 1:feature_num+1]
-            #print(tmp_data.shape)            
-            ll = np.zeros(feature_num)            
-            for t in range(diff):
-                tmp_data = np.append(tmp_data , ll)
-            #print('diff=' , diff)
-            if diff == 0:
-                tmp_data = tmp_data.reshape(-1,1)
-            #print(len(tmp_data))
-            tmp_data = np.asarray(tmp_data)
-            tmp_data = tmp_data.reshape(int(len(tmp_data)/num_steps/feature_num) , num_steps , feature_num)
+        for i in range(len(sequence)):         
+            max_indices[0 , i] = max_len - len(sequence[i])   
+            for t in range(max_len - len(sequence[i])):                                                            
+                sequence[i]  = np.concatenate((sequence[i] , np.zeros((1,feature_num))) , axis = 0)
+                labels[i] = np.concatenate((labels[i] , np.zeros(1)) , axis = 0)                                
+            output_seq.append(sequence[i])
+            output_label.append(labels[i])
+        #print('output_seq:' , output_seq[0])
+        print('shape:' , np.array(output_seq[0]).shape) #30303
+        print('output_seq: ' , np.array(output_seq).shape)
+        
+        output_seq = np.reshape(np.array(output_seq), [-1 , max_len , feature_num])
+        output_label = np.reshape(output_label, [-1 , max_len])
+        max_indices = np.array(max_indices)
+        return output_seq , output_label , max_len , max_indices
+    else:
+        for i in range(data.shape[0]):
+            cur_sen = data[i][0].split('_')[0]+ '_' + data[i][0].split('_')[1]
+            if i+1 == data.shape[0]:
+                next_sen == '' #???                        
+            else:
+                next_sen = data[i+1][0].split('_')[0]+ '_' + data[i+1][0].split('_')[1]                
             
-            
+            if cur_sen != next_sen or i+1 == data.shape[0]:
+                #print(cur_speaker)
+                tmp_data = data[j:i+1 , 1:feature_num+1]
+                
+                #print(tmp_data.shape)                          
+                sequence.append(tmp_data)                
+                j = i+1
+        
+        for i in range(len(sequence)):
+            if len(sequence[i]) > max_len:
+                max_len = len(sequence[i])
+        #append 0
+        
+        output_seq = []                      
+        max_indices = np.zeros((1,len(sequence)))
 
-            tmp_label = data[j:i+1 , feature_num+3]            
-            kk = [37] #sil
-            for s in range(diff):
-                tmp_label = np.append(tmp_label , kk)            
-            tmp_label = np.asarray(tmp_label)
-            
-            tmp_label = tmp_label.reshape(int(len(tmp_label)/num_steps) , num_steps)
-            
-            j = i+1
-            for x in range(tmp_data.shape[0]):
-                sequence.append(tmp_data[x])
-            for y in range(tmp_label.shape[0]):
-                labels.append(tmp_label[y])
-    
-    return sequence , labels
+        for i in range(len(sequence)):         
+            max_indices[0 , i] = max_len - len(sequence[i])   
+            for t in range(max_len - len(sequence[i])):                                                            
+                sequence[i]  = np.concatenate((sequence[i] , np.zeros((1,feature_num))) , axis = 0)                                                
+            output_seq.append(sequence[i])            
+        #print('output_seq:' , output_seq[0])
+        print('shape:' , np.array(output_seq[0]).shape) #30303
+        print('output_seq: ' , np.array(output_seq).shape)
+        
+        output_seq = np.reshape(np.array(output_seq), [-1 , max_len , feature_num])        
+        max_indices = np.array(max_indices)
+        return output_seq , max_len , max_indices
 
 def cross_validation(sequence , params):
     training_ratio = params['training_ratio']    
@@ -119,29 +159,51 @@ def cross_validation(sequence , params):
     return sequence[:training_len] ,sequence[training_len:] 
 
 
-def gen_batch(sequence , labels ,params):
+def gen_batch(sequence , labels ,params , max_len , max_indices):
     num_steps = params['num_steps']
     batch_size = params['batch_size']
     feature_num = params['feature_num']
     
     shuffle_index = list(range(len(sequence)))
-    
+    print('shu:' , len(shuffle_index))
     shuffle(shuffle_index)
     sequence = np.array(sequence)
     labels = np.array(labels)
     sequence = sequence[shuffle_index]
     labels = labels[shuffle_index]
+    max_indices = max_indices[0 , shuffle_index]
     print('ori=' , len(sequence))
     diff = batch_size - len(sequence) % batch_size
     print('diff=' , diff)
     tmp_seq = sequence
     tmp_label = labels
+    tmp_indices = max_indices
     for i in range(diff):
         tmp_seq = np.append(tmp_seq , sequence[i])
         tmp_label = np.append(tmp_label , labels[i])
+        tmp_indices = np.append(tmp_indices , max_indices[i])
     print('len=' , len(tmp_seq))       
-    batch_data = np.array(tmp_seq).reshape(int(len(tmp_seq)/batch_size/num_steps/feature_num) , batch_size , num_steps , feature_num)
-    batch_label = np.array(tmp_label).reshape(int(len(tmp_label)/batch_size/num_steps) , batch_size , num_steps)
+    batch_data = np.reshape(tmp_seq , [-1 , batch_size , max_len , feature_num])
+    batch_label = np.reshape(tmp_label , [-1 , batch_size , max_len])
+    batch_indices = np.reshape(tmp_indices , [-1 , batch_size])
     #total_batch = np.reshape(sequence, [len(sequence)/batch_size, batch_size, num_steps, numOfFeatures])
     
-    return batch_data , batch_label
+    return batch_data , batch_label , batch_indices
+
+def gen_test_batch(sequence , params , max_len , max_indices):
+    num_steps = params['num_steps']
+    batch_size = params['batch_size']
+    feature_num = params['feature_num']
+    
+    diff = batch_size - len(sequence) % batch_size
+   
+    tmp_seq = sequence
+    
+    tmp_indices = max_indices
+    for i in range(diff):
+        tmp_seq = np.append(tmp_seq , sequence[i])        
+        tmp_indices = np.append(tmp_indices , max_indices[i])
+    print('len=' , len(tmp_seq))       
+    batch_data = np.reshape(tmp_seq , [-1 , batch_size , max_len , feature_num])    
+    batch_indices = np.reshape(tmp_indices , [-1 , batch_size])
+    return test_batch
