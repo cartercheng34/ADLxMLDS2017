@@ -7,12 +7,12 @@ import pandas as pd
 import sys
 
 
-train_data_path = './MLDS_hw2_data/training_data/feat'
+train_data_path = sys.argv[1] + 'training_data/feat'
 #test_data_path = './MLDS_hw2_data/testing_data/feat'
 test_data_path = sys.argv[1] + 'testing_data/feat'
 
-train_label_path = './MLDS_hw2_data/training_label.json'
-test_label_path = './MLDS_hw2_data/testing_label.json'
+train_label_path = sys.argv[1] + 'training_label.json'
+test_label_path = sys.argv[1] + 'testing_label.json'
 
 model_path = './model'
 output_file = sys.argv[2]
