@@ -11,16 +11,16 @@ class S2VT():
         self.n_lstm_steps = params['n_lstm_steps']
         self.n_video_lstm_step = params['n_video_lstm_step']
         self.n_caption_lstm_step = params['n_caption_lstm_step']
-        #self.keep_prob = params['keep_prob']
+        self.keep_prob = params['keep_prob']
 
-        with tf.device("/gpu:0"):
-            self.Wemb = tf.Variable(tf.random_uniform([n_words, self.dim_hidden], -0.1, 0.1), name='Wemb')
+        
+        self.Wemb = tf.Variable(tf.random_uniform([n_words, self.dim_hidden], -0.1, 0.1), name='Wemb')
         #self.bemb = tf.Variable(tf.zeros([dim_hidden]), name='bemb')
 
         self.lstm1 = tf.nn.rnn_cell.BasicLSTMCell(self.dim_hidden, state_is_tuple=True)
-        #self.lstm1 = tf.contrib.rnn.DropoutWrapper(self.lstm1 , output_keep_prob = self.keep_prob)
+        self.lstm1 = tf.contrib.rnn.DropoutWrapper(self.lstm1 , output_keep_prob = self.keep_prob)
         self.lstm2 = tf.nn.rnn_cell.BasicLSTMCell(self.dim_hidden, state_is_tuple=True)
-        #self.lstm2 = tf.contrib.rnn.DropoutWrapper(self.lstm2 , output_keep_prob = self.keep_prob)
+        self.lstm2 = tf.contrib.rnn.DropoutWrapper(self.lstm2 , output_keep_prob = self.keep_prob)
 
         self.encode_image_W = tf.Variable( tf.random_uniform([self.dim_image, self.dim_hidden], -0.1, 0.1), name='encode_image_W')
         self.encode_image_b = tf.Variable( tf.zeros([self.dim_hidden]), name='encode_image_b')
@@ -30,6 +30,9 @@ class S2VT():
             self.embed_word_b = tf.Variable(bias_init_vector.astype(np.float32), name='embed_word_b')
         else:
             self.embed_word_b = tf.Variable(tf.zeros([n_words]), name='embed_word_b')
+
+        self.attention_W = tf.Variable(tf.truncated_normal([self.n_lstm_steps, self.n_lstm_steps], -0.01, 0.01), name='attention_W')
+        self.attention_b = tf.Variable(tf.zeros([self.n_lstm_steps]), name='attention_b')
 
     def build_model(self):
         video = tf.placeholder(tf.float32, [self.batch_size, self.n_video_lstm_step, self.dim_image])
@@ -59,23 +62,32 @@ class S2VT():
                     tf.get_variable_scope().reuse_variables()
 
                 with tf.variable_scope("LSTM1"):
-                    output1, state1 = self.lstm1(image_emb[:,i,:], state1)
+                    output1, state1 = self.lstm1(tf.concat([padding, image_emb[:, i, :]], 1), state1)
 
                 with tf.variable_scope("LSTM2"):
                     output2, state2 = self.lstm2(tf.concat([padding, output1], 1), state2)
+                    output2 = tf.reshape(output2, [self.batch_size, self.dim_hidden, 1])
+                if i == 0:
+                    attention_X = output2
+                else:
+                    attention_X = tf.concat([attention_X, output2], 2) # b x h x n
+            attention_X = tf.reshape(attention_X, [-1, self.n_video_lstm_step]) # (b x h) x n
+            attention = tf.nn.xw_plus_b(attention_X, self.attention_W, self.attention_b) # (b x h) x n
+            attention = tf.reshape(attention, [self.batch_size, self.dim_hidden, self.n_video_lstm_step]) # b x h x n
+            attention = tf.reduce_sum(attention, 2) # b x h
 
             ############################# Decoding Stage ######################################
             for i in range(self.n_caption_lstm_step): ## Phase 2 => only generate captions
                 #if i == 0:
                 #    current_embed = tf.zeros([self.batch_size, self.dim_hidden])
                 #else:
-                with tf.device("/gpu:0"):
-                    current_embed = tf.nn.embedding_lookup(self.Wemb, caption[:, i])
+                
+                current_embed = tf.nn.embedding_lookup(self.Wemb, caption[:, i])
 
                 tf.get_variable_scope().reuse_variables()
 
                 with tf.variable_scope("LSTM1"):
-                    output1, state1 = self.lstm1(padding, state1)
+                    output1, state1 = self.lstm1(tf.concat([attention, padding], 1), state1)
 
                 with tf.variable_scope("LSTM2"):
                     output2, state2 = self.lstm2(tf.concat([current_embed, output1], 1), state2)
@@ -104,7 +116,7 @@ class S2VT():
         #image_emb = tf.nn.xw_plus_b(video_flat, self.encode_image_W, self.encode_image_b)
         image_emb = tf.matmul(video_flat, self.encode_image_W) + self.encode_image_b
         image_emb = tf.reshape(image_emb, [1, self.n_video_lstm_step, self.dim_hidden])
-
+        self.batch_size = tf.shape(video)[0]
         size1 = self.lstm1.state_size
         size2 = self.lstm2.state_size
         #print('size1=' , size1) 
@@ -123,20 +135,28 @@ class S2VT():
                     tf.get_variable_scope().reuse_variables()
 
                 with tf.variable_scope("LSTM1"):
-                    output1, state1 = self.lstm1(image_emb[:, i, :], state1)
+                    output1, state1 = self.lstm1(tf.concat([padding, image_emb[:, i, :]], 1), state1)
 
                 with tf.variable_scope("LSTM2"):
                     output2, state2 = self.lstm2(tf.concat([padding, output1], 1), state2)
+                    output2 = tf.reshape(output2, [self.batch_size, self.dim_hidden, 1])
+                if i == 0:
+                    attention_X = output2
+                else:
+                    attention_X = tf.concat([attention_X, output2], 2)
+            attention_X = tf.reshape(attention_X, [-1, self.n_video_lstm_step]) 
+            attention = tf.nn.xw_plus_b(attention_X, self.attention_W, self.attention_b) 
+            attention = tf.reshape(attention, [self.batch_size, self.dim_hidden, self.n_video_lstm_step]) 
+            attention = tf.reduce_sum(attention, 2) 
 
             for i in range(self.n_caption_lstm_step):
                 tf.get_variable_scope().reuse_variables()
 
-                if i == 0:
-                    with tf.device('/gpu:0'):
-                        current_embed = tf.nn.embedding_lookup(self.Wemb, tf.ones([1], dtype=tf.int64))
+                if i == 0:                    
+                    current_embed = tf.nn.embedding_lookup(self.Wemb, tf.ones([1], dtype=tf.int64))
 
                 with tf.variable_scope("LSTM1"):
-                    output1, state1 = self.lstm1(padding, state1)
+                    output1, state1 = self.lstm1(tf.concat([attention, padding], 1), state1)
 
                 with tf.variable_scope("LSTM2"):
                     output2, state2 = self.lstm2(tf.concat([current_embed, output1], 1), state2)
@@ -147,9 +167,9 @@ class S2VT():
                 generated_words.append(max_prob_index)
                 probs.append(logit_words)
 
-                with tf.device("/gpu:0"):
-                    current_embed = tf.nn.embedding_lookup(self.Wemb, max_prob_index)
-                    current_embed = tf.expand_dims(current_embed, 0)
+                
+                current_embed = tf.nn.embedding_lookup(self.Wemb, max_prob_index)
+                current_embed = tf.expand_dims(current_embed, 0)
 
                 embeds.append(current_embed)
 
