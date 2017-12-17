@@ -1,5 +1,5 @@
 from agent_dir.agent import Agent
-from agent_dir.reinforcement import DQN, DuelingDQN
+from agent_dir.reinforcement import DQN, DuelingDQN, DoubleDQN
 from test import test
 from environment import Environment
 import tensorflow as tf
@@ -15,6 +15,8 @@ class Agent_DQN(Agent):
         """
 
         super(Agent_DQN,self).__init__(env)
+
+        tf.reset_default_graph()
         self.DQN = DuelingDQN(env, args.test_dqn)
         self.resume = False
         self.args = args
@@ -90,7 +92,7 @@ class Agent_DQN(Agent):
             t_elapsed = int(time.time() - t_start)
             sys.stdout.write('\r#--- Step: %-7d  epsilon: %-6.4f  elapsed: %02d:%02d:%02d   updated times: %-6d' % (
                 step_count, self.DQN.epsilon, t_elapsed // 3600, t_elapsed % 3600 // 60, t_elapsed % 60, learn_count))
-
+            """
             if (step_count > 100000) and (step_count % 100000 == 0):
                 self.DQN.save_model('model_dldqn_new/model.ckpt', int(step_count/1000))
                 np.save('model_dldqn_new/record.npy', [step_count, frame_count, learn_count, episode_count, episode_reward, self.DQN.memory_count, self.DQN.learn_step_count, self.DQN.epsilon])
@@ -102,9 +104,7 @@ class Agent_DQN(Agent):
                     print('step:' , step_count)
                     print('test_score:' , test_score)
                     print('################################################################')
-                    if test_score > 40:
-                        wait = input("Baseline passed. Continue? [y/n] ")
-                        if wait == n: break
+            """
 
         f.close()
 

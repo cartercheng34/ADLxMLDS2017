@@ -52,7 +52,7 @@ class Agent_PG(Agent):
         """
 
         super(Agent_PG,self).__init__(env)
-
+        tf.reset_default_graph()
         self.n_obs = 80 * 80
         self.hidden_units = 200
         self.n_actions = 3
