@@ -97,7 +97,7 @@ for p in range(5):
 
     for i in range(len(ids)):
         #for j in range(num_images):
-        skimage.io.imsave(os.path.join(pic_save_path , 'sample3_' + ids[i] + '_' + str(p) + '.jpg') , caption_images[ids[i]][0][p])
+        skimage.io.imsave(os.path.join(pic_save_path , 'sample_' + ids[i] + '_' + str(p) + '.jpg') , caption_images[ids[i]][0][p])
 """
 encodings = encoder.encode([early_text])
 z_noise = np.random.uniform(-1, 1, [1, params['z_dim']])
