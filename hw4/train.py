@@ -104,7 +104,7 @@ gen_updates = 2
 model_path = 'dcgan-model/'
 
 params = dict(
-    z_dim = 100,
+    z_dim = 400,
     t_dim = 256,
     batch_size = 32,
     image_size = 64,
