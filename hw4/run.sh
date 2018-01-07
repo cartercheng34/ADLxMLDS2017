@@ -10,6 +10,6 @@ rm MLDS/skip_thoughts.tgz
 tar zxvf MLDS/model.tgz
 rm MLDS/model.tgz
 
-python3 generate.py $1
+python3.5 generate.py $1
 
 exit 0
