@@ -9,7 +9,7 @@ import scipy.spatial.distance as sd
 import pdb
 import random
 import pickle
-import WGAN
+
 
 os.environ['CUDA_VISIBLE_DEVICES']='0'
 
