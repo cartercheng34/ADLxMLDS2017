@@ -43,6 +43,9 @@ params = dict(
     caption_length = 2400
 )
 
+if not os.path.exists(pic_save_path):
+    os.makedirs(pic_save_path)
+
 np.random.seed(10)
 gan = DCGAN.GAN(params)
 _, _, _, _ = gan.build_model()
